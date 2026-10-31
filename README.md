@@ -15,10 +15,6 @@ A fan made version of Retro Bowl with a built in mod menu.
 - Optional starter save on first launch
 - Unlocked full version / no nag walls in the web build
 
-## Preview
-
-![Retro Bowl Modded Preview](img/preview.png)
-
 ## Controls
 
 - Click **MOD MENU** to open the mod menu
@@ -41,12 +37,6 @@ On first visit you can load `saves/starter.json`, a pre built save with high cre
 > All Retro Bowl trademarks, copyrights, and other intellectual property
 > remain with their respective owners.
 > please dont sue me
-
-## Contributing
-
-Contributions are welcome. Before submitting changes, please read the project's [Contributing Guidelines](CONTRIBUTING.md).
-
-The contributing guidelines cover the expected project structure, UI standards, save data handling, development setup, pull requests, and issue reporting.
 
 ## License
 
