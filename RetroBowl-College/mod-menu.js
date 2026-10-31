@@ -6,35 +6,76 @@
     const SETTINGS_KEY = "moose_college_gameplay_mods";
 
     const mods = {
-        noFumbles: false
+        noFumbles: false,
+        noInjuries: false
     };
 
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
         mods.noFumbles = !!saved.noFumbles;
+        mods.noInjuries = !!saved.noInjuries;
     } catch (e) {}
 
     function saveSettings() {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(mods));
+        try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(mods));
+        } catch (e) {}
     }
 
-    let hookInstalled = false;
-    let originalDropBall = null;
+    const hooks = {
+        noFumbles: false,
+        noInjuries: false
+    };
 
     function installHooks() {
-        if (hookInstalled) return;
+        // NO FUMBLES
+        // College uses gml_Script_s_drop_ball.
+        if (
+            !hooks.noFumbles &&
+            typeof window.gml_Script_s_drop_ball === "function"
+        ) {
+            const original = window.gml_Script_s_drop_ball;
 
-        if (typeof window._W31 !== "function") return;
+            if (!original.__collegeModHook) {
+                const replacement = function () {
+                    const isFumble = Boolean(arguments[2]);
 
-        originalDropBall = window._W31;
+                    if (mods.noFumbles && isFumble) {
+                        return;
+                    }
 
-        window._W31 = function () {
-            if (mods.noFumbles) return;
-            return originalDropBall.apply(this, arguments);
-        };
+                    return original.apply(this, arguments);
+                };
 
-        hookInstalled = true;
-        window._W31.__collegeHooked = true;
+                replacement.__collegeModHook = true;
+                window.gml_Script_s_drop_ball = replacement;
+                hooks.noFumbles = true;
+            }
+        }
+
+        // NO INJURIES
+        // Returning false prevents the injury check from creating an injury.
+        if (
+            !hooks.noInjuries &&
+            typeof window.gml_Script_s_check_for_injury === "function"
+        ) {
+            const original = window.gml_Script_s_check_for_injury;
+
+            if (!original.__collegeModHook) {
+                const replacement = function () {
+                    if (mods.noInjuries) {
+                        return false;
+                    }
+
+                    return original.apply(this, arguments);
+                };
+
+                replacement.__collegeModHook = true;
+                window.gml_Script_s_check_for_injury = replacement;
+                hooks.noInjuries = true;
+            }
+        }
+
         updateStatus();
     }
 
@@ -42,12 +83,16 @@
         const status = document.getElementById("college-hook-status");
         if (!status) return;
 
-        status.textContent = hookInstalled
-            ? "Gameplay hook detected"
-            : "Waiting for game functions...";
+        const fumbles = hooks.noFumbles ? "Connected" : "Waiting...";
+        const injuries = hooks.noInjuries ? "Connected" : "Waiting...";
+
+        status.textContent =
+            "No Fumbles Hook: " + fumbles +
+            "\nNo Injuries Hook: " + injuries;
     }
 
     const style = document.createElement("style");
+
     style.textContent = `
         #college-mod-open {
             position: fixed;
@@ -102,6 +147,7 @@
         .college-mod-toggle input {
             width: 20px;
             height: 20px;
+            cursor: pointer;
         }
 
         #college-mod-panel button {
@@ -111,6 +157,12 @@
             border: 2px solid white;
             cursor: pointer;
             font: inherit;
+        }
+
+        #college-hook-status {
+            white-space: pre-line;
+            line-height: 1.8;
+            opacity: .9;
         }
     `;
 
@@ -137,6 +189,11 @@
                 <input type="checkbox" id="college-no-fumbles">
             </label>
 
+            <label class="college-mod-toggle">
+                <span>No Injuries</span>
+                <input type="checkbox" id="college-no-injuries">
+            </label>
+
             <p id="college-hook-status">
                 Checking game functions...
             </p>
@@ -144,10 +201,10 @@
 
         <div class="college-mod-section">
             <strong>COMING NEXT</strong>
-            <p>No Injuries</p>
             <p>Freeze Clock</p>
             <p>Unlimited Downs</p>
             <p>Infinite Stamina</p>
+            <p>Player Speed Multiplier</p>
         </div>
 
         <div class="college-mod-section">
@@ -161,17 +218,27 @@
     document.body.appendChild(open);
     document.body.appendChild(panel);
 
-    const toggle = panel.querySelector("#college-no-fumbles");
-    toggle.checked = mods.noFumbles;
+    const fumbleToggle = panel.querySelector("#college-no-fumbles");
+    const injuryToggle = panel.querySelector("#college-no-injuries");
 
-    toggle.addEventListener("change", function () {
-        mods.noFumbles = toggle.checked;
+    fumbleToggle.checked = mods.noFumbles;
+    injuryToggle.checked = mods.noInjuries;
+
+    fumbleToggle.addEventListener("change", function () {
+        mods.noFumbles = fumbleToggle.checked;
         saveSettings();
     });
 
-    open.onclick = () => panel.classList.add("open");
+    injuryToggle.addEventListener("change", function () {
+        mods.noInjuries = injuryToggle.checked;
+        saveSettings();
+    });
 
-    panel.querySelector("#college-mod-close").onclick = () => {
+    open.onclick = function () {
+        panel.classList.add("open");
+    };
+
+    panel.querySelector("#college-mod-close").onclick = function () {
         panel.classList.remove("open");
     };
 
@@ -185,9 +252,8 @@
 
     const hookTimer = setInterval(function () {
         installHooks();
-        updateStatus();
 
-        if (hookInstalled) {
+        if (hooks.noFumbles && hooks.noInjuries) {
             clearInterval(hookTimer);
         }
     }, 500);
