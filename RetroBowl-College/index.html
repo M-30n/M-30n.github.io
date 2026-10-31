@@ -147,6 +147,193 @@
             });
         })();
     </script>
+
+    <script>
+        (function () {
+    function boot() {
+        if (typeof GameMaker_Init !== "function") {
+            setTimeout(boot, 40);
+            return;
+        }
+        GameMaker_Init();
+        installCollegeHooks();
+    }
+    
+    window.addEventListener("load", function () {
+        boot();
+    });
+
+    // Retro Bowl College save data identifiers inside browser memory
+    var COLLEGE_SAVE_KEYS = ["RetroBowlCollege.0.savedata.ini", "RetroBowlCollegeModded.0.savedata.ini"];
+    var SETTINGS_KEY = "moose_college_gameplay_mods";
+    
+    var collegeMods = (window.CollegeMods = {
+        freezeClock: false,
+        noFumbles: false,
+        noInjuries: false,
+        perfectGPA: false,          // College Specific: Prevents player academic suspensions
+        infiniteScholarship: false,   // College Specific: Bypasses budget boundaries
+        unlimitedDowns: false,
+        fieldGoalAimbot: false
+    });
+
+    var frozenClock = null;
+
+    // Load existing preferences safely
+    try {
+        var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+        Object.keys(collegeMods).forEach(function (name) {
+            if (typeof saved[name] === "boolean") collegeMods[name] = saved[name];
+        });
+    } catch (err) {}
+
+    function saveSettings() {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(collegeMods));
+    }
+
+    function activeMatch() {
+        if (typeof window._si !== "function") return null;
+        var matches = window._si(71); // Grabs active telemetry data container
+        var match = (matches && matches.length) ? matches[0] : null;
+        if (!match || match._r11 === undefined) return null;
+        return match;
+    }
+
+    function forceClockFrozen(match) {
+        if (!match) return;
+        if (!frozenClock) {
+            frozenClock = { minutes: match._r11, seconds: match._s11 };
+        }
+        match._r11 = frozenClock.minutes;
+        match._s11 = frozenClock.seconds;
+    }
+
+    // Intercept engine operations and override calculations
+    function installCollegeHooks() {
+        // 1. Hook Fumbles
+        var originalDropBall = window._W31;
+        if (typeof originalDropBall === "function" && !originalDropBall.__mooseHooked) {
+            window._W31 = function () {
+                if (collegeMods.noFumbles) return;
+                return originalDropBall.apply(this, arguments);
+            };
+            window._W31.__mooseHooked = true;
+        }
+
+        // 2. Hook College Injuries
+        var originalInjuryCheck = window._mf1;
+        if (typeof originalInjuryCheck === "function" && !originalInjuryCheck.__mooseHooked) {
+            window._mf1 = function () {
+                if (collegeMods.noInjuries) return 0; // Force game-loop logic to declare safe status
+                return originalInjuryCheck.apply(this, arguments);
+            };
+            window._mf1.__mooseHooked = true;
+        }
+
+        // 3. Hook Time Progression
+        var originalSubtractTime = window._Ad1;
+        if (typeof originalSubtractTime === "function" && !originalSubtractTime.__mooseHooked) {
+            window._Ad1 = function () {
+                if (collegeMods.freezeClock) {
+                    forceClockFrozen(arguments[0] || activeMatch());
+                    return;
+                }
+                return originalSubtractTime.apply(this, arguments);
+            };
+            window._Ad1.__mooseHooked = true;
+        }
+    }
+
+    // Loop telemetry check every tick frame (33ms)
+    function processLiveAdjustments() {
+        try {
+            installCollegeHooks();
+            var match = activeMatch();
+            if (match) {
+                if (collegeMods.freezeClock) forceClockFrozen(match);
+                else frozenClock = null;
+                if (collegeMods.unlimitedDowns && match._t11 >= 4 && match._t11 < 6) {
+                    match._t11 = 1; // Down variable loop rewrite
+                }
+            }
+        } catch (err) {}
+    }
+    window.setInterval(processLiveAdjustments, 33);
+
+    // ---- INI Text Storage Engine Modifiers ----
+    function findSaveKey() {
+        for (var i = 0; i < COLLEGE_SAVE_KEYS.length; i++) {
+            if (localStorage.getItem(COLLEGE_SAVE_KEYS[i])) return COLLEGE_SAVE_KEYS[i];
+        }
+        return COLLEGE_SAVE_KEYS[0];
+    }
+
+    function replaceField(s, name, value) {
+        var re = new RegExp(name + '="[^"]*"', "g");
+        if (re.test(s)) return s.replace(re, name + '="' + value + '"');
+        return s + "\r\n" + name + '="' + value + '"\r\n';
+    }
+
+    // Exposed execution functions to trigger from your UI panels
+    window.SetCollegeCredits = function (amount) {
+        var key = findSaveKey();
+        var data = localStorage.getItem(key) || "";
+        if (!data) return alert("Please boot up a college save slot first!");
+        
+        // Target structural variables for Credits and Scholarship budgets
+        data = replaceField(data, "coach_credit", amount);
+        if (collegeMods.infiniteScholarship) {
+            data = replaceField(data, "scholarship_cap", "500000");
+        }
+        localStorage.setItem(key, data);
+        alert("Mod injected successfully. Refreshing game runtime state...");
+        location.reload();
+    };
+
+    // ---- STATS & RATINGS MODIFIER ENGINE FOR COACHES OR PLAYERS ----
+    window.ModifyCollegeRosterAsset = function (assetType, index, attributeName, newValue) {
+        var key = findSaveKey();
+        var data = localStorage.getItem(key) || "";
+        if (!data) return alert("Please boot up a college save slot first!");
+
+        // Determine if target prefix is coach ("staff_") or player ("roster_")
+        var prefix = (assetType === "coach") ? "staff_" : "roster_";
+        var searchKey = prefix + index;
+        
+        // Look up the asset string matching standard INI structures: searchKey="field1=val,field2=val"
+        var targetRegex = new RegExp(searchKey + '="([^"]*)"');
+        var match = data.match(targetRegex);
+
+        if (!match) return alert("Target " + assetType + " index [" + index + "] was not found in this save file.");
+
+        var propertiesString = match[1];
+        var propertyArray = propertiesString.split(",");
+        var updated = false;
+
+        // Trace comma-separated sub-attributes inside the object block
+        for (var i = 0; i < propertyArray.length; i++) {
+            if (propertyArray[i].indexOf(attributeName + "=") === 0) {
+                propertyArray[i] = attributeName + "=" + newValue;
+                updated = true;
+                break;
+            }
+        }
+
+        // Add the attribute if it didn't exist in the current line string
+        if (!updated) {
+            propertyArray.push(attributeName + "=" + newValue);
+        }
+
+        // Reassemble and write clean string back to save state block
+        var modifiedLine = searchKey + '="' + propertyArray.join(",") + '"';
+        data = data.replace(targetRegex, modifiedLine);
+        
+        localStorage.setItem(key, data);
+        alert("Modified " + assetType + " (" + index + ") " + attributeName + " to: " + newValue + ". Refreshing state...");
+        location.reload();
+    };
+})();
+    </script>
     <!-- Poki end -->
 
     <!-- Builtin injector for injecting google analytics code -->
