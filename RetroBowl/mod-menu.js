@@ -45,7 +45,7 @@
       tickerMessageIndex = (tickerMessageIndex + 1) % 2;
       return tickerMessageIndex === 0
         ? "this mod so tuff boiiii"
-        : "Mod made by Jaxson and available on GitHub :)";
+        : "Mod made by M-30n and available on GitHub :)";
     };
   }
 
