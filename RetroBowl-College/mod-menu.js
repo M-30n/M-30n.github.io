@@ -7,13 +7,19 @@
 
     const mods = {
         noFumbles: false,
-        noInjuries: false
+        noInjuries: false,
+        speedMultiplier: 1
     };
 
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
         mods.noFumbles = !!saved.noFumbles;
         mods.noInjuries = !!saved.noInjuries;
+
+        const savedSpeed = Number(saved.speedMultiplier);
+        if (Number.isFinite(savedSpeed)) {
+            mods.speedMultiplier = Math.min(3, Math.max(1, savedSpeed));
+        }
     } catch (e) {}
 
     function saveSettings() {
@@ -24,12 +30,12 @@
 
     const hooks = {
         noFumbles: false,
-        noInjuries: false
+        noInjuries: false,
+        speed: false
     };
 
     function installHooks() {
         // NO FUMBLES
-        // College uses gml_Script_s_drop_ball.
         if (
             !hooks.noFumbles &&
             typeof window.gml_Script_s_drop_ball === "function"
@@ -54,7 +60,6 @@
         }
 
         // NO INJURIES
-        // Returning false prevents the injury check from creating an injury.
         if (
             !hooks.noInjuries &&
             typeof window.gml_Script_s_check_for_injury === "function"
@@ -63,16 +68,43 @@
 
             if (!original.__collegeModHook) {
                 const replacement = function () {
-                    if (mods.noInjuries) {
-                        return false;
-                    }
-
+                    if (mods.noInjuries) return false;
                     return original.apply(this, arguments);
                 };
 
                 replacement.__collegeModHook = true;
                 window.gml_Script_s_check_for_injury = replacement;
                 hooks.noInjuries = true;
+            }
+        }
+
+        // SPEED MULTIPLIER
+        // The College game uses s_get_attribute("speed")
+        // when calculating player acceleration.
+        if (
+            !hooks.speed &&
+            typeof window.gml_Script_s_get_attribute === "function"
+        ) {
+            const original = window.gml_Script_s_get_attribute;
+
+            if (!original.__collegeModHook) {
+                const replacement = function () {
+                    const result = original.apply(this, arguments);
+
+                    if (
+                        mods.speedMultiplier > 1 &&
+                        arguments[3] === "speed" &&
+                        typeof result === "number"
+                    ) {
+                        return result * mods.speedMultiplier;
+                    }
+
+                    return result;
+                };
+
+                replacement.__collegeModHook = true;
+                window.gml_Script_s_get_attribute = replacement;
+                hooks.speed = true;
             }
         }
 
@@ -83,12 +115,10 @@
         const status = document.getElementById("college-hook-status");
         if (!status) return;
 
-        const fumbles = hooks.noFumbles ? "Connected" : "Waiting...";
-        const injuries = hooks.noInjuries ? "Connected" : "Waiting...";
-
         status.textContent =
-            "No Fumbles Hook: " + fumbles +
-            "\nNo Injuries Hook: " + injuries;
+            "No Fumbles: " + (hooks.noFumbles ? "Connected" : "Waiting...") +
+            "\nNo Injuries: " + (hooks.noInjuries ? "Connected" : "Waiting...") +
+            "\nSpeed: " + (hooks.speed ? "Connected" : "Waiting...");
     }
 
     const style = document.createElement("style");
@@ -159,6 +189,21 @@
             font: inherit;
         }
 
+        .college-speed-control {
+            margin-top: 18px;
+        }
+
+        .college-speed-control input {
+            width: 100%;
+            margin-top: 12px;
+            accent-color: white;
+            cursor: pointer;
+        }
+
+        #college-speed-value {
+            float: right;
+        }
+
         #college-hook-status {
             white-space: pre-line;
             line-height: 1.8;
@@ -194,9 +239,22 @@
                 <input type="checkbox" id="college-no-injuries">
             </label>
 
-            <p id="college-hook-status">
-                Checking game functions...
-            </p>
+            <div class="college-speed-control">
+                <strong>PLAYER SPEED</strong>
+                <span id="college-speed-value"></span>
+
+                <input
+                    type="range"
+                    id="college-speed-slider"
+                    min="1"
+                    max="3"
+                    step="0.25"
+                >
+
+                <p>Adjust player speed from 1x to 3x.</p>
+            </div>
+
+            <p id="college-hook-status">Checking game functions...</p>
         </div>
 
         <div class="college-mod-section">
@@ -204,7 +262,6 @@
             <p>Freeze Clock</p>
             <p>Unlimited Downs</p>
             <p>Infinite Stamina</p>
-            <p>Player Speed Multiplier</p>
         </div>
 
         <div class="college-mod-section">
@@ -220,9 +277,18 @@
 
     const fumbleToggle = panel.querySelector("#college-no-fumbles");
     const injuryToggle = panel.querySelector("#college-no-injuries");
+    const speedSlider = panel.querySelector("#college-speed-slider");
+    const speedValue = panel.querySelector("#college-speed-value");
 
     fumbleToggle.checked = mods.noFumbles;
     injuryToggle.checked = mods.noInjuries;
+    speedSlider.value = mods.speedMultiplier;
+
+    function updateSpeedLabel() {
+        speedValue.textContent = mods.speedMultiplier.toFixed(2) + "x";
+    }
+
+    updateSpeedLabel();
 
     fumbleToggle.addEventListener("change", function () {
         mods.noFumbles = fumbleToggle.checked;
@@ -231,6 +297,12 @@
 
     injuryToggle.addEventListener("change", function () {
         mods.noInjuries = injuryToggle.checked;
+        saveSettings();
+    });
+
+    speedSlider.addEventListener("input", function () {
+        mods.speedMultiplier = Number(speedSlider.value);
+        updateSpeedLabel();
         saveSettings();
     });
 
@@ -253,9 +325,8 @@
     const hookTimer = setInterval(function () {
         installHooks();
 
-        if (hooks.noFumbles && hooks.noInjuries) {
+        if (hooks.noFumbles && hooks.noInjuries && hooks.speed) {
             clearInterval(hookTimer);
         }
     }, 500);
-
 })();
