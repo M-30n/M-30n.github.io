@@ -75,6 +75,70 @@
   }
 
   #game, ruffle-player { display: block; width: 100%; height: 100%; }
+
+  .toolbar { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+  .tool-btn {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--chalk);
+    background: var(--leather);
+    border: 0;
+    border-radius: 4px;
+    padding: 14px 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 var(--ink);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tool-btn:hover, .tool-btn:focus-visible { transform: translateY(2px); box-shadow: 0 2px 0 var(--ink); }
+  .tool-btn:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
+
+  /* real fullscreen: the game fills the whole display */
+  .screen:fullscreen, .screen:-webkit-full-screen {
+    width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0;
+  }
+  /* fallback for browsers without a fullscreen API (e.g. iPhone) */
+  .screen.expanded {
+    position: fixed; inset: 0; z-index: 100;
+    width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0;
+  }
+
+  dialog {
+    margin: auto;
+    width: min(520px, calc(100% - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding: 24px;
+    background: var(--chalk);
+    color: var(--ink);
+    border: 0;
+    border-left: 10px solid var(--leather);
+    border-radius: 6px;
+    box-shadow: 0 8px 0 var(--ink), 0 30px 80px rgba(0, 0, 0, 0.6);
+  }
+  dialog::backdrop { background: rgba(10, 30, 18, 0.75); }
+  dialog h2 { font-family: 'Press Start 2P', 'Courier New', monospace; font-weight: 400; font-size: 1rem; margin-bottom: 16px; }
+
+  .close-btn {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 1.6rem; line-height: 1; color: var(--ink);
+    background: none; border: 0; cursor: pointer; padding: 4px 8px;
+  }
+  .close-btn:focus-visible { outline: 3px solid var(--leather); border-radius: 4px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 4px; border-bottom: 2px solid #dfe6da; vertical-align: top; }
+  th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5a4f; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+
+  kbd {
+    display: inline-block; min-width: 28px; text-align: center; padding: 2px 8px;
+    background: #fff; border: 2px solid var(--ink); border-bottom-width: 4px; border-radius: 4px;
+    font: 700 0.9rem 'Barlow', sans-serif;
+  }
+  .note { margin-top: 14px; font-size: 0.9rem; color: #4b5a4f; line-height: 1.4; }
+
+  @media (prefers-reduced-motion: reduce) { .tool-btn { transition: none; } }
 </style>
 </head>
 <body>
@@ -88,6 +152,27 @@
     </div>
   </div>
 
+  <div class="toolbar">
+    <button class="tool-btn" id="fs-btn" type="button">Full Screen</button>
+    <button class="tool-btn" id="controls-open" type="button">Controls</button>
+  </div>
+
+  <dialog id="controls-dialog" aria-labelledby="controls-title">
+    <button class="close-btn" id="controls-close" type="button" aria-label="Close controls">&times;</button>
+    <h2 id="controls-title">Controls</h2>
+    <table>
+      <thead><tr><th>Input</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Mouse click</td><td>Pick menu options, teams, formations and plays.</td></tr>
+        <tr><td><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd><br>or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Move your player on the field.</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Snap the ball and start the play. Also used to kick.</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Leave full screen.</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Click on the game once before playing so it can receive your keystrokes.</p>
+    <p class="note">These are the controls most guides list for this game. Exact keys can vary by play, so the in-game instructions are the final word.</p>
+  </dialog>
+
   <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
   <script>
     window.addEventListener('load', function () {
@@ -96,6 +181,37 @@
       document.getElementById('game').appendChild(player);
       player.load({ url: 'AxisFootballLeague.swf' });
     });
+
+    (function () {
+      var screenEl = document.querySelector('.screen');
+      var fsBtn = document.getElementById('fs-btn');
+      var canFS = !!(screenEl.requestFullscreen || screenEl.webkitRequestFullscreen);
+      var expanded = false;
+
+      function isFS() { return document.fullscreenElement || document.webkitFullscreenElement; }
+      function label() { fsBtn.textContent = (isFS() || expanded) ? 'Exit Full Screen' : 'Full Screen'; }
+
+      fsBtn.addEventListener('click', function () {
+        if (canFS) {
+          if (isFS()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+          else { (screenEl.requestFullscreen || screenEl.webkitRequestFullscreen).call(screenEl); }
+        } else {
+          expanded = !expanded;
+          screenEl.classList.toggle('expanded', expanded);
+          label();
+        }
+      });
+      document.addEventListener('fullscreenchange', label);
+      document.addEventListener('webkitfullscreenchange', label);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && expanded) { expanded = false; screenEl.classList.remove('expanded'); label(); }
+      });
+
+      var dialog = document.getElementById('controls-dialog');
+      document.getElementById('controls-open').addEventListener('click', function () { dialog.showModal(); });
+      document.getElementById('controls-close').addEventListener('click', function () { dialog.close(); });
+      dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
+    })();
   </script>
 </body>
 </html>
