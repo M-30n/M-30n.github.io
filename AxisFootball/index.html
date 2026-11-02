@@ -1,1 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Axis Football League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Barlow:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --turf: #1f5a34;
+    --turf-dark: #174628;
+    --chalk: #f3f6ef;
+    --ink: #14213d;
+    --leather: #a8461c;
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { min-height: 100%; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Barlow', 'Segoe UI', Tahoma, sans-serif;
+    font-weight: 500;
+    color: var(--chalk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 32px 20px;
+    background-color: var(--turf-dark);
+    background-image:
+      radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255, 255, 255, 0.22), transparent 70%),
+      radial-gradient(ellipse 120% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+      repeating-linear-gradient(90deg, var(--turf) 0 90px, var(--turf-dark) 90px 180px);
+    background-attachment: fixed;
+  }
+
+  .back {
+    align-self: flex-start;
+    color: var(--chalk);
+    font-weight: 700;
+    text-decoration: none;
+    opacity: 0.85;
+  }
+  .back:hover, .back:focus-visible { opacity: 1; text-decoration: underline; }
+
+  h1 {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-weight: 400;
+    font-size: clamp(1.1rem, 4vw, 1.8rem);
+    line-height: 1.3;
+    text-align: center;
+    text-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .stage {
+    width: min(760px, 100%);
+    padding: 12px;
+    background: var(--chalk);
+    border-radius: 8px;
+    border-bottom: 8px solid var(--leather);
+    box-shadow: 0 10px 0 var(--ink), 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .screen {
+    width: 100%;
+    aspect-ratio: 650 / 575; /* this game's stage size */
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  #game, ruffle-player { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+  <a class="back" href="/">&larr; Game Portal</a>
+
+  <h1>Axis Football League</h1>
+
+  <div class="stage">
+    <div class="screen">
+      <div id="game"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  <script>
+    window.addEventListener('load', function () {
+      var ruffle = window.RufflePlayer.newest();
+      var player = ruffle.createPlayer();
+      document.getElementById('game').appendChild(player);
+      player.load({ url: 'AxisFootballLeague.swf' });
+    });
+  </script>
+</body>
+</html>
